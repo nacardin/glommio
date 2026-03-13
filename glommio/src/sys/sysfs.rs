@@ -853,19 +853,30 @@ mod test {
         for cpu in cpus_online {
             let cpu = cpu.unwrap();
             let cpu_topology = sysfs_path.join(format!("cpu/cpu{cpu}/topology"));
-            let paths = ["core_cpus", "core_siblings", "die_cpus", "package_cpus"];
-            for path in &paths {
-                let f_mask = cpu_topology.join(path);
-                let f_list = cpu_topology.join(format!("{path}_list"));
-                assert_eq!(
-                    HexBitIterator::from_path(&f_mask)
-                        .unwrap()
-                        .collect::<Vec<_>>(),
-                    ListIterator::from_path(&f_list)
-                        .unwrap()
-                        .map(Result::unwrap)
-                        .collect::<Vec<_>>(),
-                );
+            let entries = std::fs::read_dir(&cpu_topology).unwrap();
+            for entry in entries {
+                let entry = entry.unwrap();
+                let path = entry.path();
+
+                // Only look at files that end in `_list`
+                if let Some(file_name) = path.file_name().and_then(|n| n.to_str()) {
+                    if let Some(base_name) = file_name.strip_suffix("_list") {
+                        let f_mask = cpu_topology.join(base_name);
+                        let f_list = path.clone();
+
+                        assert_eq!(
+                            HexBitIterator::from_path(&f_mask)
+                                .unwrap()
+                                .collect::<Vec<_>>(),
+                            ListIterator::from_path(&f_list)
+                                .unwrap()
+                                .map(Result::unwrap)
+                                .collect::<Vec<_>>(),
+                            "mismatch for topology file {}",
+                            base_name
+                        );
+                    }
+                }
             }
         }
     }
